@@ -1,0 +1,156 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    job: setup-s3
+  name: setup-s3
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  labels:
+    job: setup-s3
+  name: setup-s3
+spec:
+  template:
+    metadata:
+      labels:
+        job: setup-s3
+    spec:
+      serviceAccountName: setup-s3
+      containers:
+      - image: ghcr.io/kwkoo/s3-utils
+        name: setup-s3
+        command:
+        - /bin/bash
+        - "-c"
+        - |
+          until curl -s -o /dev/null $AWS_ENDPOINT_URL_S3 2>/dev/null; do
+            echo "waiting for minio API..."
+            sleep 5
+          done
+          mc alias set minio $AWS_ENDPOINT_URL_S3 $AWS_ACCESS_KEY_ID $AWS_SECRET_ACCESS_KEY
+
+          echo "creating bucket..."
+          mc mb minio/models
+
+          echo "installing torch-model-archiver..."
+          pip3 --no-cache-dir install torch-model-archiver
+          echo "downloading model..."
+          curl -LO https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8x.pt
+
+          # prepare requirements.txt
+          echo ultralytics > requirements.txt
+          echo clip >> requirements.txt
+          echo pillow >> requirements.txt
+
+          echo "creating .mar..."
+          /root/.local/bin/torch-model-archiver \
+            --model-name yolov8x \
+            --version 1.0 \
+            --serialized-file yolov8x.pt \
+            --handler /data/custom_handler.py \
+            -r requirements.txt
+          
+          echo "uploading to s3 bucket..."
+          python3 /data/upload_to_s3.py
+        env:
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: minio
+              key: MINIO_ROOT_USER
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio
+              key: MINIO_ROOT_PASSWORD
+        - name: AWS_ENDPOINT_URL_S3
+          value: "http://minio:9000"
+        - name: MC_INSECURE
+          value: "true"
+        volumeMounts:
+        - name: data
+          mountPath: /data
+          readOnly: true
+        resources: {}
+      restartPolicy: Never
+      volumes:
+      - name: data
+        configMap:
+          name: setup-s3
+status: {}
+---
+apiVersion: v1
+data:
+  config.properties: |
+    inference_address=http://0.0.0.0:8085
+    management_address=http://0.0.0.0:8085
+    metrics_address=http://0.0.0.0:8082
+    grpc_inference_port=7070
+    grpc_management_port=7071
+    enable_metrics_api=true
+    metrics_format=prometheus
+    number_of_netty_threads=4
+    job_queue_size=10
+    enable_envvars_config=true
+    install_py_dep_per_model=true
+    model_store=/mnt/models/model-store
+    model_snapshot={"name":"startup.cfg","modelCount":1,"models":{"yolo":{"1.0":{"defaultVersion":true,"marName":"yolov8x.mar","minWorkers":1,"maxWorkers":1,"batchSize":1,"maxBatchDelay":10,"responseTimeout":120}}}}
+  upload_to_s3.py: |
+    #!/usr/bin/env python3
+
+    import boto3
+    import os
+
+    if __name__ == '__main__':
+        bucket = os.environ.get('S3_BUCKET', 'models')
+        session = boto3.session.Session()
+        s3_client = session.client(
+                service_name='s3',
+                aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+                aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+                endpoint_url=os.environ.get('AWS_ENDPOINT_URL_S3')
+            )
+
+        s3_client.upload_file("/data/config.properties", bucket, "config/config.properties")
+        s3_client.upload_file("yolov8x.mar", bucket, "model-store/yolov8x.mar")
+  custom_handler.py: "import logging\nimport os\nfrom collections import Counter\n\nimport
+    torch\nfrom torchvision import transforms\nfrom ultralytics import YOLO\n\nfrom
+    ts.torch_handler.object_detector import ObjectDetector\n\nimport io\nfrom PIL
+    import Image\nimport base64\n\nlogger = logging.getLogger(__name__)\n\ntry:\n
+    \   import torch_xla.core.xla_model as xm\n\n    XLA_AVAILABLE = True\nexcept
+    ImportError as error:\n    XLA_AVAILABLE = False\n\n\nclass Yolov8Handler(ObjectDetector):\n
+    \   image_processing = transforms.Compose(\n        [transforms.Resize(640), transforms.CenterCrop(640),
+    transforms.ToTensor()]\n    )\n\n    def __init__(self):\n        super(Yolov8Handler,
+    self).__init__()\n\n    def initialize(self, context):\n        # Set device type\n
+    \       if torch.cuda.is_available():\n            self.device = torch.device(\"cuda\")\n
+    \       elif XLA_AVAILABLE:\n            self.device = xm.xla_device()\n        else:\n
+    \           self.device = torch.device(\"cpu\")\n\n        # Load the model\n
+    \       properties = context.system_properties\n        self.manifest = context.manifest\n
+    \       model_dir = properties.get(\"model_dir\")\n        self.model_pt_path
+    = None\n        if \"serializedFile\" in self.manifest[\"model\"]:\n            serialized_file
+    = self.manifest[\"model\"][\"serializedFile\"]\n            self.model_pt_path
+    = os.path.join(model_dir, serialized_file)\n        self.model = self._load_torchscript_model(self.model_pt_path)\n
+    \       logger.debug(\"Model file %s loaded successfully\", self.model_pt_path)\n\n
+    \       self.initialized = True\n\n    def _load_torchscript_model(self, model_pt_path):\n
+    \       \"\"\"Loads the PyTorch model and returns the NN model object.\n\n        Args:\n
+    \           model_pt_path (str): denotes the path of the model file.\n\n        Returns:\n
+    \           (NN Model Object) : Loads the model object.\n        \"\"\"\n        #
+    TODO: remove this method if https://github.com/pytorch/text/issues/1793 gets resolved\n\n
+    \       model = YOLO(model_pt_path)\n        model.to(self.device)\n        return
+    model\n    \n    def postprocess(self, res):\n        output = []\n        for
+    data in res:\n            annotated_frame = data.plot()\n            annotated_image
+    = Image.fromarray(annotated_frame)\n            annotated_jpg = io.BytesIO()\n
+    \           annotated_image.save(annotated_jpg, format=\"JPEG\")\n            b64
+    = base64.b64encode(annotated_jpg.getvalue()).decode('ascii')\n\n            classes
+    = data.boxes.cls.tolist()\n            names = data.names\n\n            # Map
+    to class names\n            classes = map(lambda cls: names[int(cls)], classes)\n\n
+    \           # Get a count of objects detected\n            result = Counter(classes)\n\n
+    \           output.append({\n                \"image\": b64,\n                \"detected\":
+    dict(result)\n            })\n\n        return output\n"
+kind: ConfigMap
+metadata:
+  labels:
+    job: setup-s3
+  name: setup-s3

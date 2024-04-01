@@ -1,0 +1,38 @@
+# Downloaded from https://github.com/kserve/kserve/blob/master/config/runtimes/kserve-torchserve.yaml
+apiVersion: serving.kserve.io/v1alpha1
+#kind: ClusterServingRuntime
+kind: ServingRuntime
+metadata:
+  name: kserve-torchserve
+spec:
+  annotations:
+    prometheus.kserve.io/port: "8082"
+    prometheus.kserve.io/path: "/metrics"
+  supportedModelFormats:
+    - name: pytorch
+      version: "1"
+      autoSelect: true
+      priority: 2
+  protocolVersions:
+    - v1
+    - v2
+    - grpc-v2
+  containers:
+    - name: kserve-container
+      image: ghcr.io/kwkoo/openshift-torchserve-kfs:0.10.0-gpu
+      #image: docker.io/pytorch/torchserve-kfs:0.10.0-gpu
+      args:
+        - torchserve
+        - --start
+        - --model-store=/mnt/models/model-store
+        - --ts-config=/mnt/models/config/config.properties
+      env:
+        - name: "TS_SERVICE_ENVELOPE"
+          value: "kservev2"
+      resources:
+        requests:
+          cpu: "1"
+          memory: 2Gi
+        limits:
+          cpu: "1"
+          memory: 2Gi

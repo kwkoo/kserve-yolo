@@ -1,0 +1,53 @@
+---
+apiVersion: v1
+stringData:
+  AWS_ACCESS_KEY_ID: XXX
+  AWS_SECRET_ACCESS_KEY: XXX
+kind: Secret
+metadata:
+  labels:
+    app: yolo
+  annotations:
+    serving.kserve.io/s3-endpoint: "minio.demo.svc:9000"
+    serving.kserve.io/s3-usehttps: "0"
+  name: kserve-secret
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: yolo
+  name: kserve-sa
+secrets:
+- name: kserve-secret
+---
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  labels:
+    app: yolo
+  annotations:
+    # note - ensure that you change the uid to the namespace uid + 1
+    # https://github.com/kserve/kserve/blob/master/docs/OPENSHIFT_GUIDE.md#with-service-mesh-istio
+    #
+    # proj=demo
+    # start_uid="$(oc get ns $proj -o jsonpath='{.metadata.annotations.openshift\.io/sa\.scc\.uid-range}' | cut -d / -f 1)"
+    # init_uid=$(( start_uid + 1 ))
+    #
+    serving.kserve.io/storage-initializer-uid: "1000910001"
+    serving.knative.openshift.io/enablePassthrough: "true"
+    sidecar.istio.io/inject: "true"
+    sidecar.istio.io/rewriteAppHTTPProvers: "true"
+  name: yolo
+spec:
+  predictor:
+    serviceAccountName: kserve-sa
+    model:
+      modelFormat:
+        name: pytorch
+      storageUri: s3://models
+      protocolVersion: v2
+    tolerations:
+      - key: nvidia.com/gpu
+        value: "True"
+        effect: NoSchedule
