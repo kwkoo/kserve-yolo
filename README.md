@@ -16,7 +16,7 @@ This repo deploys an object detection YOLO model using KServe and TorchServe.
 
 			openshift-install create install-config
 
-	*   Set the compute pool to 1 replica with an `p3.2xlarge` instance, and set the control plane to a single master (you will need to have `yq` installed)
+	*   Set the compute pool to 2 replicas with `p3.2xlarge` instances, and set the control plane to a single master (you will need to have `yq` installed)
 
 			mv install-config.yaml install-config-old.yaml
 
@@ -131,7 +131,7 @@ To run nginx locally for testing
 		  -it \
 		  --name nginx \
 		  -p 8080:8080 \
-		  -v ./frontend/conf/server_block.conf:/opt/bitnami/nginx/		conf/server_blocks/server_block.conf \
+		  -v ./frontend/conf/server_block.conf:/opt/bitnami/nginx/conf/server_blocks/server_block.conf \
 		  -v ./frontend/html:/html \
 		  docker.io/bitnami/nginx:latest
 
