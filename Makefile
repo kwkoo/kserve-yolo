@@ -4,16 +4,24 @@ BUILDERNAME=multiarch-builder
 
 BASE:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 
-.PHONY: deploy ensure-logged-in deploy-nfd deploy-nvidia deploy-kserve-dependencies deploy-oai deploy-minio upload-model deploy-yolo deploy-frontend clean-frontend minio-console clean-minio frontend-image
+.PHONY: deploy ensure-logged-in configure-user-workload-monitoring deploy-nfd deploy-nvidia deploy-kserve-dependencies deploy-oai deploy-minio upload-model deploy-yolo deploy-frontend clean-frontend minio-console clean-minio frontend-image
 
 
-deploy: ensure-logged-in deploy-nvidia deploy-kserve-dependencies deploy-oai deploy-minio upload-model deploy-yolo
+deploy: ensure-logged-in configure-user-workload-monitoring deploy-nvidia deploy-kserve-dependencies deploy-oai deploy-minio upload-model deploy-yolo
 	@echo "installation complete"
 
 
 ensure-logged-in:
 	oc whoami
 	@echo 'user is logged in'
+
+
+configure-user-workload-monitoring:
+	if [ `oc get -n openshift-monitoring cm/cluster-monitoring-config --no-headers 2>/dev/null | wc -l` -lt 1 ]; then \
+	  echo 'enableUserWorkload: true' > /tmp/config.yaml; \
+	  oc create -n openshift-monitoring cm cluster-monitoring-config --from-file=/tmp/config.yaml; \
+	  rm -f /tmp/config.yaml; \
+	fi
 
 
 deploy-nfd: ensure-logged-in

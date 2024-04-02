@@ -40,7 +40,8 @@ This repo deploys an object detection YOLO model using KServe and TorchServe.
 		make deploy
 	
 	This will:
-	
+
+	*   Configure OpenShift for User Workload Monitoring
 	*   Deploy the NFD and Nvidia GPU operators
 	*   Deploy the OpenShift Serverless and Service Mesh operators
 	*   Deploy OpenShift AI and KServe
