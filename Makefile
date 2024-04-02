@@ -144,7 +144,7 @@ deploy-oai:
 
 deploy-minio:
 	@echo "deploying minio..."
-	-oc create ns $(PROJ)
+	-oc create ns $(PROJ) || echo "namespace exists"
 	oc apply -n $(PROJ) -f $(BASE)/yaml/minio.yaml
 	@/bin/echo -n "waiting for minio routes..."
 	@until oc get -n $(PROJ) route/minio >/dev/null 2>/dev/null && oc get -n $(PROJ) route/minio-console >/dev/null 2>/dev/null; do \
@@ -161,7 +161,7 @@ deploy-minio:
 
 upload-model:
 	@echo "removing any previous jobs..."
-	-oc delete -n $(PROJ) -f $(BASE)/yaml/s3-job.yaml
+	-oc delete -n $(PROJ) -f $(BASE)/yaml/s3-job.yaml || echo "nothing to delete"
 	@/bin/echo -n "waiting for job to go away..."
 	@while [ `oc get -n $(PROJ) --no-headers job/setup-s3 2>/dev/null | wc -l` -gt 0 ]; do \
 	  /bin/echo -n "."; \
@@ -184,11 +184,25 @@ upload-model:
 deploy-yolo:
 	@/bin/echo -n "waiting for ServingRuntime CRD..."
 	@until oc get crd servingruntimes.serving.kserve.io >/dev/null 2>/dev/null; do \
-	  @/bin/echo -n "."; \
+	  /bin/echo -n "."; \
 	  sleep 5; \
 	done
 	@echo "done"
 	oc apply -f $(BASE)/yaml/kserve-torchserve.yaml
+
+	@/bin/echo -n "waiting for ServiceMeshControlPlane..."
+	@until oc get -n istio-system smcp/data-science-smcp >/dev/null 2>/dev/null; do \
+	  /bin/echo -n "."; \
+	  sleep 5; \
+	done
+	@echo "done"
+	@oc get -n istio-system smcp/data-science-smcp -o jsonpath='{.spec.proxy.networking.trafficControl.inbound.excludedPorts}' | grep 8082; \
+	if [ $$? -eq 0 ]; then \
+	  echo "ServiceMeshControlPlane already configured to exclude port 8082 from proxy"; \
+	else \
+	  echo "patching ServiceMeshControlPlane to exclude TorchServe metrics port from proxy"; \
+	  oc patch -n istio-system smcp/data-science-smcp --type json -p '[{"op":"add", "path":"/spec/proxy/networking/trafficControl/inbound/excludedPorts/-", "value":8082}]'; \
+	fi
 
 	@echo "deploying inference service..."
 	# inference service
@@ -210,6 +224,9 @@ deploy-yolo:
 	  -e "s/storage-initializer-uid: .*/storage-initializer-uid: \"$$INIT_UID\"/" \
 	  $(BASE)/yaml/inference.yaml \
 	| oc apply -n $(PROJ) -f -
+
+	@echo "deploying extra Service and ServiceMonitor for TorchServe metrics..."
+	oc apply -f $(BASE)/yaml/servicemonitor.yaml
 
 
 deploy-frontend:

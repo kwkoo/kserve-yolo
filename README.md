@@ -78,13 +78,14 @@ If you wish to modify `custom_handler.py`, the easiest way to test the handler w
 	torchserve \
 	  --start \
 	  --model-store model-store \
-	  --models yolo=yolov8x.mar
+	  --models yolo=yolov8x.mar \
+	  --ts-config config/config.properties
 
-Ensure that `./model-store/yolov8x.mar` exists beforehand.
+Ensure that `./model-store/yolov8x.mar` and `./config/config.properties` exists beforehand.
 
 To send a test request
 
-	curl -s localhost:8080/predictions/yolo -T bus.jpg
+	curl -s localhost:8085/predictions/yolo -T bus.jpg
 
 
 ## Testing the model in KServe
@@ -143,6 +144,20 @@ To run nginx locally for testing
 		make minio-console
 
 *   Login to the console with `minio` / `minio123`
+
+
+## Metrics
+
+TorchServe emits [metrics](https://github.com/pytorch/serve/blob/master/ts/configs/metrics.yaml). These metrics can be accessed from the OpenShift Console, under Observe / Metrics.
+
+To access these metrics via curl,
+
+	oc port-forward \
+	  -n demo \
+	  svc/yolo-torchserve-metrics \
+	  8082:8082
+
+	curl localhost:8082/metrics
 
 
 ## Resources
