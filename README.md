@@ -166,6 +166,8 @@ To access these metrics via curl,
 
 	curl localhost:8082/metrics
 
+You can also access metrics through the [`thanos-querier`](https://docs.openshift.com/container-platform/4.15/monitoring/enabling-monitoring-for-user-defined-projects.html#accessing-metrics-from-outside-cluster_enabling-monitoring-for-user-defined-projects).
+
 
 ## Resources
 
