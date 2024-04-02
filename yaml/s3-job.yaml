@@ -90,6 +90,7 @@ data:
     grpc_inference_port=7070
     grpc_management_port=7071
     enable_metrics_api=true
+    metrics_mode=prometheus
     metrics_format=prometheus
     number_of_netty_threads=4
     job_queue_size=10
