@@ -215,7 +215,7 @@ deploy-yolo:
 	@echo "deploying inference service..."
 	# inference service
 	#
-	-oc create ns $(PROJ)
+	-oc create ns $(PROJ) || echo "namespace exists"
 	@AWS_ACCESS_KEY_ID="`oc extract secret/minio -n $(PROJ) --to=- --keys=MINIO_ROOT_USER 2>/dev/null`" \
 	&& \
 	AWS_SECRET_ACCESS_KEY="`oc extract secret/minio -n $(PROJ) --to=- --keys=MINIO_ROOT_PASSWORD 2>/dev/null`" \

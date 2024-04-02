@@ -35,6 +35,12 @@ This repo deploys an object detection YOLO model using KServe and TorchServe.
 
 01. Set the `KUBECONFIG` environment variable to point to the new cluster
 
+01. Setup the ingress with certificates from Let's Encrypt
+
+		./scripts/setup-letsencrypt
+	
+	Note: After the certificates have been installed, you will need to edit `kubeconfig` and comment out `.clusters[*].cluster.certificate-authority-data`
+
 01. Deploy OpenShift AI and its dependencies to OpenShift
 
 		make deploy
