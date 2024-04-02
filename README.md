@@ -93,7 +93,7 @@ To send a test request
 
 *   Prepare the payload by passing in an image - assuming the image is named `bus.jpg`
 
-		python3 tobytes.py bus.jpg
+		python3 ./scripts/tobytes.py bus.jpg
 
 *   This will create a file named `bus.json`
 
