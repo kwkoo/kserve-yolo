@@ -26,18 +26,6 @@ kind: InferenceService
 metadata:
   labels:
     app: yolo
-  annotations:
-    # note - ensure that you change the uid to the namespace uid + 1
-    # https://github.com/kserve/kserve/blob/master/docs/OPENSHIFT_GUIDE.md#with-service-mesh-istio
-    #
-    # proj=demo
-    # start_uid="$(oc get ns $proj -o jsonpath='{.metadata.annotations.openshift\.io/sa\.scc\.uid-range}' | cut -d / -f 1)"
-    # init_uid=$(( start_uid + 1 ))
-    #
-    serving.kserve.io/storage-initializer-uid: "1000910001"
-    serving.knative.openshift.io/enablePassthrough: "true"
-    sidecar.istio.io/inject: "true"
-    sidecar.istio.io/rewriteAppHTTPProvers: "true"
   name: yolo
 spec:
   predictor:
@@ -51,3 +39,23 @@ spec:
       - key: nvidia.com/gpu
         value: "True"
         effect: NoSchedule
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    name: yolo-internal
+  name: yolo-internal
+spec:
+  ports:
+  - name: http
+    port: 8085
+    protocol: TCP
+    targetPort: 8085
+  - name: metrics
+    port: 8082
+    protocol: TCP
+    targetPort: 8082
+  selector:
+    serving.kserve.io/inferenceservice: yolo
+  type: ClusterIP

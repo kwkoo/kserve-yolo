@@ -2,20 +2,18 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app: frontend
-  name: frontend
+    app: yolo-frontend
+  name: yolo-frontend
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: frontend
+      app: yolo-frontend
   strategy: {}
   template:
     metadata:
-      annotations:
-        sidecar.istio.io/inject: 'true'
       labels:
-        app: frontend
+        app: yolo-frontend
     spec:
       containers:
       - image: ghcr.io/kwkoo/kserve-yolo-frontend
@@ -30,8 +28,8 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
-    app: frontend
-  name: frontend
+    app: yolo-frontend
+  name: yolo-frontend
 spec:
   ports:
   - name: http
@@ -39,39 +37,23 @@ spec:
     protocol: TCP
     targetPort: 8080
   selector:
-    app: frontend
+    app: yolo-frontend
 status:
   loadBalancer: {}
 ---
-apiVersion: networking.istio.io/v1alpha3
-kind: VirtualService
+apiVersion: route.openshift.io/v1
+kind: Route
 metadata:
-  name: frontend
+  labels:
+    app: yolo-frontend
+  name: yolo-frontend
 spec:
-  hosts:
-  - frontend.demo.svc.cluster.local
-  - frontend-demo.apps.demo.com
-  gateways:
-  - frontend
-  http:
-  - route:
-    - destination:
-        host: frontend
-        port:
-          number: 8080
-      weight: 100
----
-apiVersion: networking.istio.io/v1alpha3
-kind: Gateway
-metadata:
-  name: frontend
-spec:
-  selector:
-    istio: ingressgateway # use istio default controller
-  servers:
-  - port:
-      number: 80
-      name: http
-      protocol: HTTP
-    hosts:
-    - frontend-demo.apps.demo.com
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Allow
+  port:
+    targetPort: 8080
+  to:
+    name: yolo-frontend
+    weight: null
+status: {}

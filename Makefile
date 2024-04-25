@@ -87,24 +87,6 @@ deploy-kserve-dependencies:
 	  sleep 5; \
 	done
 	@echo 'done'
-	@echo "deploying Elasticsearch operator..."
-	oc apply -f $(BASE)/yaml/operators/elasticsearch-operator.yaml
-	@/bin/echo -n 'waiting for elasticsearch operator pod...'
-	@while [ `oc get po -n openshift-operators-redhat -l name=elasticsearch-operator --no-headers 2>/dev/null | wc -l` -lt 1 ]; do \
-	  /bin/echo -n '.'; \
-	  sleep 5; \
-	done
-	@echo 'done'
-	oc wait -n openshift-operators-redhat po -l name=elasticsearch-operator --for condition=Ready
-	@echo "deploying distributed tracing operator..."
-	oc apply -f $(BASE)/yaml/operators/distributed-tracing-operator.yaml
-	@/bin/echo -n 'waiting for distributed tracing operator pod...'
-	@while [ `oc get po -n openshift-distributed-tracing --no-headers -l name=jaeger-operator 2>/dev/null | wc -l` -lt 1 ]; do \
-	  /bin/echo -n '.'; \
-	  sleep 5; \
-	done
-	@echo 'done'
-	oc wait -n openshift-distributed-tracing po -l name=jaeger-operator --for condition=Ready
 	@echo "deploying OpenShift Service Mesh operator..."
 	@EXISTING="`oc get -n openshift-operators operatorgroup/global-operators -o jsonpath='{.metadata.annotations.olm\.providedAPIs}' 2>/dev/null`"; \
 	if [ -z "$$EXISTING" ]; then \
@@ -198,20 +180,6 @@ deploy-yolo:
 	@echo "done"
 	oc apply -f $(BASE)/yaml/kserve-torchserve.yaml
 
-	@/bin/echo -n "waiting for ServiceMeshControlPlane..."
-	@until oc get -n istio-system smcp/data-science-smcp >/dev/null 2>/dev/null; do \
-	  /bin/echo -n "."; \
-	  sleep 5; \
-	done
-	@echo "done"
-	@oc get -n istio-system smcp/data-science-smcp -o jsonpath='{.spec.proxy.networking.trafficControl.inbound.excludedPorts}' | grep 8082; \
-	if [ $$? -eq 0 ]; then \
-	  echo "ServiceMeshControlPlane already configured to exclude port 8082 from proxy"; \
-	else \
-	  echo "patching ServiceMeshControlPlane to exclude TorchServe metrics port from proxy"; \
-	  oc patch -n istio-system smcp/data-science-smcp --type json -p '[{"op":"add", "path":"/spec/proxy/networking/trafficControl/inbound/excludedPorts/-", "value":8082}]'; \
-	fi
-
 	@echo "deploying inference service..."
 	# inference service
 	#
@@ -220,16 +188,11 @@ deploy-yolo:
 	&& \
 	AWS_SECRET_ACCESS_KEY="`oc extract secret/minio -n $(PROJ) --to=- --keys=MINIO_ROOT_PASSWORD 2>/dev/null`" \
 	&& \
-	NS_UID="`oc get ns $(PROJ) -o jsonpath='{.metadata.annotations.openshift\.io/sa\.scc\.uid-range}' | cut -d / -f 1`" \
-	&& \
-	INIT_UID=$$(( NS_UID + 1 )) \
-	&& \
-	echo "AWS_ACCESS_KEY_ID=$$AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$$AWS_SECRET_ACCESS_KEY NS_UID=$$NS_UID INIT_UID=$$INIT_UID" \
+	echo "AWS_ACCESS_KEY_ID=$$AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$$AWS_SECRET_ACCESS_KEY" \
 	&& \
 	sed \
 	  -e "s/AWS_ACCESS_KEY_ID: .*/AWS_ACCESS_KEY_ID: $$AWS_ACCESS_KEY_ID/" \
 	  -e "s/AWS_SECRET_ACCESS_KEY: .*/AWS_SECRET_ACCESS_KEY: $$AWS_SECRET_ACCESS_KEY/" \
-	  -e "s/storage-initializer-uid: .*/storage-initializer-uid: \"$$INIT_UID\"/" \
 	  $(BASE)/yaml/inference.yaml \
 	| oc apply -n $(PROJ) -f -
 
@@ -238,28 +201,17 @@ deploy-yolo:
 
 
 deploy-frontend:
-	SUFFIX=`oc whoami --show-console | sed 's/^[^.]*//'`; \
-	sed \
-	  -e "s/frontend-.*/frontend-$(PROJ)$$SUFFIX/g" \
-	  $(BASE)/yaml/frontend.yaml \
-	| \
-	oc apply -n $(PROJ) -f -; \
-	sed \
-	  -e "s/frontend-.*/frontend-$(PROJ)$$SUFFIX/g" \
-	  $(BASE)/yaml/frontend-route.yaml \
-	| \
-	oc apply -f -
+	oc apply -f $(BASE)/yaml/frontend.yaml
 	@/bin/echo -n "waiting for route..."
-	@until oc get -n istio-system route/frontend >/dev/null 2>/dev/null; do \
+	@until oc get -n $(PROJ) route/yolo-frontend >/dev/null 2>/dev/null; do \
 	  /bin/echo -n "."; \
 	  sleep 5; \
 	done
 	@echo "done"
-	@echo "access the frontend at https://`oc get -n istio-system route/frontend -o jsonpath='{.spec.host}'`"
+	@echo "access the frontend at https://`oc get -n $(PROJ) route/yolo-frontend -o jsonpath='{.spec.host}'`"
 
 
 clean-frontend:
-	-oc delete -f $(BASE)/yaml/frontend-route.yaml
 	-oc delete -f $(BASE)/yaml/frontend.yaml
 
 

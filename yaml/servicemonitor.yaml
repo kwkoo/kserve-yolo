@@ -13,20 +13,4 @@ spec:
   namespaceSelector: {}
   selector:
     matchLabels:
-      name: yolo-torchserve-metrics
----
-apiVersion: v1
-kind: Service
-metadata:
-  labels:
-    name: yolo-torchserve-metrics
-  name: yolo-torchserve-metrics
-spec:
-  ports:
-  - name: torchserve
-    port: 8082
-    protocol: TCP
-    targetPort: 8082
-  selector:
-    serving.kserve.io/inferenceservice: yolo
-  type: ClusterIP
+      name: yolo-internal
