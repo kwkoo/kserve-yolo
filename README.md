@@ -69,13 +69,58 @@ The `s3-job` creates the model archive and uploads it to an S3 bucket in minio.
 Another way of generating the model archive is with the `torch-model-archiver`
 
 	torch-model-archiver \
-	  --model-name yolov8n \
+	  --model-name yolov8x \
 	  --version 1.0 \
-	  --serialized-file yolov8n.pt \
+	  --serialized-file yolov8x.pt \
 	  --handler custom_handler.py \
 	  -r requirements.txt
 
 You can also refer to `convert-pt-to-mar/convert_pt_to_mar.ipynb` for more info.
+
+
+### Preparing the model archive for offline usage
+
+Start with a Python environment that is the same version as the torchserve image (Python 3.9.18 for `torchserve-kfs:0.10.0-gpu`)
+
+01. Create a new directory to download all wheels to - name it `wheelhouse`
+
+01. Create `requirements.txt` in the `wheelhouse` directory - for example:
+
+		ultralytics
+		clip
+		pillow
+
+01. Download wheels to `wheelhouse`
+
+		pip download \
+		  -r wheelhouse/requirements.txt \
+		  -d wheelhouse
+
+01. Delete `wheelhouse/requirements.txt`
+
+01. Generate new `requirements.txt` populated with wheels
+
+		ls wheelhouse > requirements.txt
+
+01. Generate comma-separated list of files
+
+		extra=""
+		for f in `ls wheelhouse`; do \
+		  extra="$extra,wheelhouse/$f"
+		done
+
+		# get rid of comma in front
+		extra=${extra:1}
+
+01. Generate the model archive passing it the wheels in the `--extra-files` parameter
+
+		torch-model-archiver \
+		  --model-name yolov8x \
+		  --version 1.0 \
+		  --serialized-file yolov8x.pt \
+		  --handler custom_handler.py \
+		  --extra-files $extra \
+		  -r requirements.txt
 
 
 ## TorchServe
