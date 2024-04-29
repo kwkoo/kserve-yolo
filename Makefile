@@ -4,18 +4,19 @@ BUILDERNAME=multiarch-builder
 
 BASE:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 
-.PHONY: deploy ensure-logged-in configure-user-workload-monitoring deploy-nfd deploy-nvidia deploy-kserve-dependencies deploy-oai deploy-minio upload-model deploy-yolo deploy-frontend clean-frontend minio-console clean-minio frontend-image
 
-
-deploy: ensure-logged-in configure-user-workload-monitoring deploy-nvidia deploy-kserve-dependencies deploy-oai deploy-minio upload-model deploy-yolo
+.PHONY: deploy
+deploy: ensure-logged-in configure-user-workload-monitoring deploy-nvidia deploy-kserve-dependencies deploy-oai deploy-minio upload-model deploy-model deploy-frontend
 	@echo "installation complete"
 
 
+.PHONY: ensure-logged-in
 ensure-logged-in:
 	oc whoami
 	@echo 'user is logged in'
 
 
+.PHONY: configure-user-workload-monitoring
 configure-user-workload-monitoring:
 	if [ `oc get -n openshift-monitoring cm/cluster-monitoring-config --no-headers 2>/dev/null | wc -l` -lt 1 ]; then \
 	  echo 'enableUserWorkload: true' > /tmp/config.yaml; \
@@ -24,6 +25,7 @@ configure-user-workload-monitoring:
 	fi
 
 
+.PHONY: deploy-nfd
 deploy-nfd: ensure-logged-in
 	@echo "deploying NodeFeatureDiscovery operator..."
 	oc apply -f $(BASE)/yaml/operators/nfd-operator.yaml
@@ -43,6 +45,7 @@ deploy-nfd: ensure-logged-in
 	@echo 'NFD operator installed successfully'
 
 
+.PHONY: deploy-nvidia
 deploy-nvidia: deploy-nfd
 	@echo "deploying nvidia GPU operator..."
 	oc apply -f $(BASE)/yaml/operators/nvidia-operator.yaml
@@ -78,6 +81,7 @@ deploy-nvidia: deploy-nfd
 	done
 
 
+.PHONY: deploy-kserve-dependencies
 deploy-kserve-dependencies:
 	@echo "deploying OpenShift Serverless..."
 	oc apply -f $(BASE)/yaml/operators/serverless-operator.yaml
@@ -106,6 +110,7 @@ deploy-kserve-dependencies:
 	@echo 'done'
 
 
+.PHONY: deploy-oai
 deploy-oai:
 	@echo "deploying OpenShift AI operator..."
 	oc apply -f $(BASE)/yaml/operators/openshift-ai-operator.yaml
@@ -132,6 +137,7 @@ deploy-oai:
 	rm -f /tmp/storageInitializer /tmp/storageInitializer.new
 
 
+.PHONY: deploy-minio
 deploy-minio:
 	@echo "deploying minio..."
 	-oc create ns $(PROJ) || echo "namespace exists"
@@ -149,9 +155,10 @@ deploy-minio:
 	  MINIO_BROWSER_REDIRECT_URL="http://`oc get -n $(PROJ) route/minio-console -o jsonpath='{.spec.host}'`"
 
 
+.PHONY: upload-model
 upload-model:
 	@echo "removing any previous jobs..."
-	-oc delete -n $(PROJ) -f $(BASE)/yaml/s3-job.yaml || echo "nothing to delete"
+	-oc delete -n $(PROJ) -f $(BASE)/yaml/s3-job.yaml 2>/dev/null || echo "nothing to delete"
 	@/bin/echo -n "waiting for job to go away..."
 	@while [ `oc get -n $(PROJ) --no-headers job/setup-s3 2>/dev/null | wc -l` -gt 0 ]; do \
 	  /bin/echo -n "."; \
@@ -166,24 +173,23 @@ upload-model:
 	done
 	@echo "done"
 	@/bin/echo "waiting for pod to be ready..."
-	oc wait -n $(PROJ) `oc get -n $(PROJ) po -o name -l job=setup-s3` --for=condition=Ready
+	oc wait -n $(PROJ) `oc get -n $(PROJ) po -o name -l job=setup-s3` --for=condition=Ready --timeout=300s
 	oc logs -n $(PROJ) -f job/setup-s3
 	oc delete -n $(PROJ) -f $(BASE)/yaml/s3-job.yaml
 
 
-deploy-yolo:
+.PHONY: deploy-model
+deploy-model:
+	oc create ns $(PROJ) 2>/dev/null || echo "namespace exists"
 	@/bin/echo -n "waiting for ServingRuntime CRD..."
 	@until oc get crd servingruntimes.serving.kserve.io >/dev/null 2>/dev/null; do \
 	  /bin/echo -n "."; \
 	  sleep 5; \
 	done
 	@echo "done"
-	oc apply -f $(BASE)/yaml/kserve-torchserve.yaml
+	oc apply -n $(PROJ) -f $(BASE)/yaml/kserve-torchserve.yaml
 
 	@echo "deploying inference service..."
-	# inference service
-	#
-	-oc create ns $(PROJ) || echo "namespace exists"
 	@AWS_ACCESS_KEY_ID="`oc extract secret/minio -n $(PROJ) --to=- --keys=MINIO_ROOT_USER 2>/dev/null`" \
 	&& \
 	AWS_SECRET_ACCESS_KEY="`oc extract secret/minio -n $(PROJ) --to=- --keys=MINIO_ROOT_PASSWORD 2>/dev/null`" \
@@ -197,11 +203,18 @@ deploy-yolo:
 	| oc apply -n $(PROJ) -f -
 
 	@echo "deploying extra Service and ServiceMonitor for TorchServe metrics..."
-	oc apply -f $(BASE)/yaml/servicemonitor.yaml
+	oc apply -n $(PROJ) -f $(BASE)/yaml/servicemonitor.yaml
+
+.PHONY: clean-model
+clean-model:
+	oc delete -n $(PROJ) -f $(BASE)/yaml/servicemonitor.yaml 2>/dev/null || echo "nothing to delete"
+	oc delete -n $(PROJ) -f $(BASE)/yaml/inference.yaml 2>/dev/null || echo "nothing to delete"
+	oc delete -n $(PROJ) -f $(BASE)/yaml/kserve-torchserve.yaml 2>/dev/null || echo "nothing to delete"
 
 
+.PHONY: deploy-frontend
 deploy-frontend:
-	oc apply -f $(BASE)/yaml/frontend.yaml
+	oc apply -n $(PROJ) -f $(BASE)/yaml/frontend.yaml
 	@/bin/echo -n "waiting for route..."
 	@until oc get -n $(PROJ) route/yolo-frontend >/dev/null 2>/dev/null; do \
 	  /bin/echo -n "."; \
@@ -211,17 +224,23 @@ deploy-frontend:
 	@echo "access the frontend at https://`oc get -n $(PROJ) route/yolo-frontend -o jsonpath='{.spec.host}'`"
 
 
+.PHONY: clean-frontend
 clean-frontend:
 	-oc delete -f $(BASE)/yaml/frontend.yaml
 
 
+.PHONY: minio-console
 minio-console:
 	@echo "http://`oc get -n $(PROJ) route/minio-console -o jsonpath='{.spec.host}'`"
 
+
+.PHONY: clean-minio
 clean-minio:
 	oc delete -n $(PROJ) -f $(BASE)/yaml/minio.yaml
 	oc delete -n $(PROJ) pvc -l app.kubernetes.io/instance=minio,app.kubernetes.io/name=minio
 
+
+.PHONY: frontend-image
 frontend-image:
 	-mkdir -p $(BASE)/docker-cache/amd64 $(BASE)/docker-cache/arm64 2>/dev/null
 	docker buildx use $(BUILDERNAME) || docker buildx create --name $(BUILDERNAME) --use --buildkitd-flags '--oci-worker-gc-keepstorage 50000'

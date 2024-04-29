@@ -34,23 +34,16 @@ spec:
           echo "creating bucket..."
           mc mb minio/models
 
-          echo "installing torch-model-archiver..."
-          pip3 --no-cache-dir install torch-model-archiver
           echo "downloading model..."
           curl -LO https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8x.pt
 
-          # prepare requirements.txt
-          echo ultralytics > requirements.txt
-          echo clip >> requirements.txt
-          echo pillow >> requirements.txt
-
           echo "creating .mar..."
-          /root/.local/bin/torch-model-archiver \
+          /usr/local/bin/torch-model-archiver \
             --model-name yolov8x \
             --version 1.0 \
             --serialized-file yolov8x.pt \
             --handler /data/custom_handler.py \
-            -r requirements.txt
+            -r /data/requirements.txt
           
           echo "uploading to s3 bucket..."
           python3 /data/upload_to_s3.py
@@ -119,7 +112,7 @@ data:
   custom_handler.py: "import logging\nimport os\nfrom collections import Counter\n\nimport
     torch\nfrom torchvision import transforms\nfrom ultralytics import YOLO\n\nfrom
     ts.torch_handler.object_detector import ObjectDetector\n\nimport io\nfrom PIL
-    import Image\nimport base64\n\nlogger = logging.getLogger(__name__)\n\ntry:\n
+    import Image\nimport base64\nimport math\n\nlogger = logging.getLogger(__name__)\n\ntry:\n
     \   import torch_xla.core.xla_model as xm\n\n    XLA_AVAILABLE = True\nexcept
     ImportError as error:\n    XLA_AVAILABLE = False\n\n\nclass Yolov8Handler(ObjectDetector):\n
     \   image_processing = transforms.Compose(\n        [transforms.Resize(640), transforms.CenterCrop(640),
@@ -144,12 +137,19 @@ data:
     data in res:\n            annotated_frame = data.plot()\n            annotated_image
     = Image.fromarray(annotated_frame)\n            annotated_jpg = io.BytesIO()\n
     \           annotated_image.save(annotated_jpg, format=\"JPEG\")\n            b64
-    = base64.b64encode(annotated_jpg.getvalue()).decode('ascii')\n\n            classes
-    = data.boxes.cls.tolist()\n            names = data.names\n\n            # Map
-    to class names\n            classes = map(lambda cls: names[int(cls)], classes)\n\n
-    \           # Get a count of objects detected\n            result = Counter(classes)\n\n
-    \           output.append({\n                \"image\": b64,\n                \"detected\":
-    dict(result)\n            })\n\n        return output\n"
+    = base64.b64encode(annotated_jpg.getvalue()).decode('ascii')\n\n            if
+    data.speed is not None:\n                inference_speed = data.speed.get('inference')\n\n
+    \           classes = data.boxes.cls.tolist()\n            names = data.names\n\n
+    \           # Map to class names\n            classes = map(lambda cls: names[int(cls)],
+    classes)\n\n            # Get a count of objects detected\n            result
+    = Counter(classes)\n\n            o = {\n                \"image\": b64,\n                \"detected\":
+    dict(result)\n            }\n            if inference_speed is not None:\n                o['inference']
+    = math.ceil(inference_speed * 100) / 100\n            output.append(o)\n\n        return
+    output\n"
+  requirements.txt: |
+    ultralytics
+    clip
+    pillow
 kind: ConfigMap
 metadata:
   labels:

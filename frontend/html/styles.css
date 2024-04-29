@@ -63,3 +63,11 @@
 .button {
     font-size: 2em;
 }
+
+.info {
+    font-size: 1.5em;
+    font-weight: bold;
+    text-align: center;
+    margin-top: 10px;
+    margin-bottom: 10px;
+}

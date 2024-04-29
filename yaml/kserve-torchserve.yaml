@@ -30,10 +30,17 @@ spec:
       env:
         - name: "TS_SERVICE_ENVELOPE"
           value: "kservev2"
+      livenessProbe:
+        httpGet:
+          path: /v2/models
+          port: 8080
+        initialDelaySeconds: 600
       resources:
         requests:
           cpu: "1"
           memory: 2Gi
+          nvidia.com/gpu: "1"
         limits:
           cpu: "1"
           memory: 2Gi
+          nvidia.com/gpu: "1"

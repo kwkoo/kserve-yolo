@@ -4,6 +4,11 @@ var canvas = null;
 var width = 320;
 var height = 0;
 
+var preview = null;
+var loader = null;
+var responseui = null;
+var inference = null;
+
 
 function sendRequest() {
   var context = canvas.getContext('2d');
@@ -13,16 +18,15 @@ function sendRequest() {
     context.drawImage(video, 0, 0, width, height);
 
     var data = canvas.toDataURL('image/jpeg');
-    document.getElementById('preview').setAttribute('src', data);
-    document.getElementById('preview').style.display = 'block';
+    preview.setAttribute('src', data);
+    preview.style.display = 'block';
   }
 
   showWebcamSendContainer(false);
-  document.getElementById('loader').style.display = 'block';
-  let responseui = document.getElementById('response');
+  loader.style.display = 'block';
   responseui.value = '';
   responseui.style.display = 'none';
-  let imageSrc = document.getElementById('preview').src;
+  let imageSrc = preview.src;
   if (imageSrc == null | imageSrc.length == 0) {
     resetUpload();
     alert('could not get image');
@@ -58,28 +62,32 @@ function sendRequest() {
     })
     .then(response => {
       showWebcamSendContainer(true);
-      document.getElementById('loader').style.display = 'none';
-      let responseui = document.getElementById('response');
+      loader.style.display = 'none';
       responseui.value = '';
       responseui.style.display = 'block';
       return response.json();
     })
     .then(data => {
       if (data.outputs == null || data.outputs.length < 1 || data.outputs[0].data == null || data.outputs[0].data.length < 1) {
-        document.getElementById('response').value += '\ndid not get expected output';
+        responseui.value += '\ndid not get expected output';
         return;
       }
       const output = data.outputs[0].data[0];
       if (output.image != null) {
-        document.getElementById('preview').setAttribute('src', 'data:image/jpeg;charset=utf-8;base64,' + output.image);
+        preview.setAttribute('src', 'data:image/jpeg;charset=utf-8;base64,' + output.image);
+      }
+      if (output.inference == null) {
+        inference.innerText = 'unknown';
+      } else {
+        inference.innerText = output.inference + ' ms';
       }
       if (output.detected != null) {
-        document.getElementById('response').value += JSON.stringify(output.detected);
+        responseui.value += JSON.stringify(output.detected);
       }
     })
     .catch(error => {
-      document.getElementById('response').value += '\nerror fetching stream: ' + error;
-      document.getElementById('loader').style.display = 'none';
+      responseui.value += '\nerror fetching stream: ' + error;
+      loader.style.display = 'none';
       showWebcamSendContainer(true);
     });
 }
@@ -91,12 +99,15 @@ function showWebcamSendContainer(show) {
 }
 
 function initializeVideo() {
+  preview = document.getElementById('preview');
+  loader = document.getElementById('loader');
+  responseui = document.getElementById('response');
+  inference = document.getElementById('inference');
   video = document.getElementById('video');
   video.onloadeddata = () => {
     width = video.videoWidth;
     height = video.videoHeight;
 
-    let preview = document.getElementById('preview');
     preview.setAttribute('width', width);
     preview.setAttribute('height', height);
     preview.style.width = width;

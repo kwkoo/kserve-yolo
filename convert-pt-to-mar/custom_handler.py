@@ -11,6 +11,7 @@ from ts.torch_handler.object_detector import ObjectDetector
 import io
 from PIL import Image
 import base64
+import math
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,9 @@ class Yolov8Handler(ObjectDetector):
             annotated_image.save(annotated_jpg, format="JPEG")
             b64 = base64.b64encode(annotated_jpg.getvalue()).decode('ascii')
 
+            if data.speed is not None:
+                inference_speed = data.speed.get('inference')
+
             classes = data.boxes.cls.tolist()
             names = data.names
 
@@ -85,9 +89,12 @@ class Yolov8Handler(ObjectDetector):
             # Get a count of objects detected
             result = Counter(classes)
 
-            output.append({
+            o = {
                 "image": b64,
                 "detected": dict(result)
-            })
+            }
+            if inference_speed is not None:
+                o['inference'] = math.ceil(inference_speed * 100) / 100
+            output.append(o)
 
         return output

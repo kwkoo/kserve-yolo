@@ -41,7 +41,7 @@ This repo deploys an object detection YOLO model using KServe and TorchServe.
 	
 	Note: After the certificates have been installed, you will need to edit `kubeconfig` and comment out `.clusters[*].cluster.certificate-authority-data`
 
-01. Deploy OpenShift AI and its dependencies to OpenShift
+01. Deploy the model and the frontend to OpenShift
 
 		make deploy
 	
@@ -54,10 +54,7 @@ This repo deploys an object detection YOLO model using KServe and TorchServe.
 	*   Deploy minio
 	*   Converts the yolo `.pt` model to an `.mar` and uploads the `.mar` and the `config.properties` file to a bucket in minio
 	*   Deploy the `InferenceService`
-
-01. Deploy the frontend
-
-		make deploy-frontend
+	*   Deploy the frontend
 
 
 ## Preparing the model archive (`.mar`)
