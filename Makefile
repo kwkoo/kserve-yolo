@@ -181,29 +181,19 @@ upload-model:
 .PHONY: deploy-model
 deploy-model:
 	oc create ns $(PROJ) 2>/dev/null || echo "namespace exists"
+	oc label --overwrite ns/$(PROJ) modelmesh-enabled="false"
+	oc label --overwrite ns/$(PROJ) opendatahub.io/dashboard="true"
+	oc annotate --overwrite ns/$(PROJ) openshift.io/description="$(PROJ)"
+	oc annotate --overwrite ns/$(PROJ) openshift.io/display-name="$(PROJ)"
 	@/bin/echo -n "waiting for ServingRuntime CRD..."
 	@until oc get crd servingruntimes.serving.kserve.io >/dev/null 2>/dev/null; do \
 	  /bin/echo -n "."; \
 	  sleep 5; \
 	done
 	@echo "done"
-	oc apply -n $(PROJ) -f $(BASE)/yaml/kserve-torchserve.yaml
-
 	@echo "deploying inference service..."
-	@AWS_ACCESS_KEY_ID="`oc extract secret/minio -n $(PROJ) --to=- --keys=MINIO_ROOT_USER 2>/dev/null`" \
-	&& \
-	AWS_SECRET_ACCESS_KEY="`oc extract secret/minio -n $(PROJ) --to=- --keys=MINIO_ROOT_PASSWORD 2>/dev/null`" \
-	&& \
-	echo "AWS_ACCESS_KEY_ID=$$AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$$AWS_SECRET_ACCESS_KEY" \
-	&& \
-	sed \
-	  -e "s/AWS_ACCESS_KEY_ID: .*/AWS_ACCESS_KEY_ID: $$AWS_ACCESS_KEY_ID/" \
-	  -e "s/AWS_SECRET_ACCESS_KEY: .*/AWS_SECRET_ACCESS_KEY: $$AWS_SECRET_ACCESS_KEY/" \
-	  $(BASE)/yaml/inference.yaml \
-	| oc apply -n $(PROJ) -f -
+	oc apply -n $(PROJ) -f $(BASE)/yaml/inferenceservice/
 
-	@echo "deploying extra Service and ServiceMonitor for TorchServe metrics..."
-	oc apply -n $(PROJ) -f $(BASE)/yaml/servicemonitor.yaml
 
 .PHONY: clean-model
 clean-model:
@@ -270,3 +260,12 @@ frontend-image:
 	  --amend $(IMAGE):arm64
 	docker manifest push --purge $(IMAGE):latest
 
+
+.PHONY: console
+console:
+	@oc whoami --show-console
+
+
+.PHONY: dashboard
+dashboard:
+	@echo "https://`oc get -n redhat-ods-applications route/rhods-dashboard -o jsonpath='{.spec.host}'`"

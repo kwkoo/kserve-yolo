@@ -1,0 +1,21 @@
+# Service manually created for the frontend and user-monitoring
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: yolo
+    component: predictor
+    serving.kserve.io/inferenceservice: yolo
+  name: yolo-internal
+spec:
+  ports:
+  - name: web
+    port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    app: yolo
+  sessionAffinity: None
+  type: ClusterIP
+status:
+  loadBalancer: {}

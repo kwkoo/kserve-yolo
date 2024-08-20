@@ -1,0 +1,28 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  annotations:
+    openshift.io/display-name: yolo
+    serving.kserve.io/enable-prometheus-scraping: "true"
+  labels:
+    app: yolo
+    opendatahub.io/dashboard: 'true'
+  name: yolo
+spec:
+  predictor:
+    model:
+      modelFormat:
+        name: pytorch
+      resources:
+        requests:
+          cpu: "1"
+          memory: 2Gi
+          nvidia.com/gpu: "1"
+        limits:
+          cpu: "1"
+          memory: 2Gi
+          nvidia.com/gpu: "1"
+      protocolVersion: v2
+      storage:
+        key: aws-connection-models
+        path: /
