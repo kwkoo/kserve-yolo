@@ -8,12 +8,14 @@
 <body onload="initializeVideo()">
 
   <div class="title">KServe YOLO Frontend</div>
-  <video id="video">Video stream not available.</video>
-  <canvas id="canvas"></canvas>
+  <div class="row">
+    <video id="video">Video stream not available.</video>
+    <canvas id="canvas"></canvas>
+    <img id="preview"/>
+  </div>
   <div id="webcam-send-container">
     <button class="button" onclick="sendRequest()">Send</button>
   </div>
-  <img id="preview"/>
   <img id="loader" src="ajax-loader.gif"/>
   <div class="info">
     Inference Speed: <span id="inference">unknown</span>

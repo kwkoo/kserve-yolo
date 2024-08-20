@@ -107,11 +107,6 @@ function initializeVideo() {
   video.onloadeddata = () => {
     width = video.videoWidth;
     height = video.videoHeight;
-
-    preview.setAttribute('width', width);
-    preview.setAttribute('height', height);
-    preview.style.width = width;
-    preview.style.height = height;
   }
 
   navigator.mediaDevices.getUserMedia({video: true, audio: false})
